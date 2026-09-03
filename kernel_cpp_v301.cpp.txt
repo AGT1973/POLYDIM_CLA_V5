@@ -1,0 +1,10 @@
+// POLYDIM INFINITY V301 - KERNEL C++ (Placeholder)
+// Este archivo está reservado para el motor de DMA de VRAM 
+// y las primitivas de InfiniBand nativas.
+
+#include <iostream>
+
+int main() {
+    std::cout << "C++ RDMA Kernel Bypass - V301" << std::endl;
+    return 0;
+}

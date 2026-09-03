@@ -1,0 +1,7 @@
+// POLYDIM INFINITY V301 - KERNEL RUST (Placeholder)
+// Este archivo está reservado para el plano de control atómico en Rust puro
+// alineado a 128 bytes contra False Sharing L3 Cache.
+
+pub fn main() {
+    println!("Rust Zero-Copy Control Plane - V301");
+}
