@@ -1,0 +1,919 @@
+// =============================================================================
+// POLYDIM AGI CORE V506 â€” UNIFIED RUST KERNEL
+// =============================================================================
+// Archivo:  kernel_rust_v506.rs.txt
+// VersiÃ³n:  504 (11-Sep-2026 (RedTeam))
+// Autores:  Ariel Eluithi + Enjambre LatentMAS (7 IAs, 150 dÃ­as)
+//
+// Integra:  Fase 13 (Horizontal Lift 2Dâ†’10,000D)
+//           Fase 99 (Swarm Consensus con CBF)
+//           5 Fixes CrÃ­ticos (#24 #31 #39 #40 #45)
+//           SU(2) Router Â· SeqLock Â· Betti-1 Â· RDMA
+//
+// Build:    rustc --crate-type=cdylib -O -C panic=unwind \
+//                 -C target-cpu=native -C opt-level=3  \
+//                 -C codegen-units=1 -C lto=fat          \
+//                 kernel_rust_v505.rs -o pmtp_kernel_V506.dll
+// =============================================================================
+
+#![crate_type = "cdylib"]
+
+use std::ptr;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering, fence};
+
+// =============================================================================
+// Â§1  COMPILE GUARDS â€” FIX #24 (panic=abort destruye Python sin traceback)
+// =============================================================================
+
+/// Si el usuario compila con `-C panic=abort`, el proceso padre (Python)
+/// muere instantÃ¡neamente al primer unwrap fallido en Rust sin imprimir
+/// ningÃºn traceback. Esto es catastrÃ³fico para un kernel FFI.
+#[cfg(panic = "abort")]
+compile_error!(
+    "POLYDIM requiere panic=unwind para seguridad FFI. \
+     Recompilar con: rustc -C panic=unwind"
+);
+
+/// Macro que envuelve cualquier bloque FFI en catch_unwind.
+/// Si el bloque entra en pÃ¡nico, retorna `$err` en lugar de abortar.
+macro_rules! ffi_catch {
+    ($err:expr, $body:block) => {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| $body))
+            .unwrap_or($err)
+    };
+}
+
+// =============================================================================
+// Â§2  PLATFORM â€” yield cross-platform
+// =============================================================================
+
+/// Cede la ejecuciÃ³n del hilo actual al scheduler del OS.
+/// En Windows usa SwitchToThread(); en otros usa std::thread::yield_now().
+#[inline(always)]
+unsafe fn yield_thread() {
+    #[cfg(target_os = "windows")]
+    {
+        extern "system" { fn SwitchToThread() -> i32; }
+        SwitchToThread();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        std::thread::yield_now();
+    }
+}
+
+// =============================================================================
+// Â§3  FTZ/DAZ SCOPED â€” FIX #39 (restaurar MXCSR siempre)
+// =============================================================================
+
+/// Ejecuta `f` con Flush-to-Zero y Denormals-Are-Zero activos (bits 15,6 de
+/// MXCSR). Tras la ejecuciÃ³n, restaura el MXCSR original SIEMPRE, incluso
+/// si `f` entra en pÃ¡nico. Esto evita envenenar la precisiÃ³n de flotantes
+/// en librerÃ­as externas (NumPy, PyTorch) que comparten el mismo hilo.
+#[cfg(target_arch = "x86_64")]
+struct MxcsrGuard(u32);
+
+#[cfg(target_arch = "x86_64")]
+impl Drop for MxcsrGuard {
+    fn drop(&mut self) {
+        unsafe { core::arch::x86_64::_mm_setcsr(self.0); }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+unsafe fn with_ftz_daz<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let old = core::arch::x86_64::_mm_getcsr();
+    core::arch::x86_64::_mm_setcsr(old | 0x8040); // FTZ=bit15, DAZ=bit6
+    let _guard = MxcsrGuard(old);
+    f()
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+#[inline(always)]
+unsafe fn with_ftz_daz<F, R>(f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    f()
+}
+
+// =============================================================================
+// Â§4  SHM HEADER â€” 128 bytes, align(128) (match ctypes._align_=128 en Python)
+// =============================================================================
+
+/// Cabecera de la regiÃ³n de memoria compartida (mmap/CreateFileMapping).
+/// Alineada a 128 bytes para evitar false sharing en CPUs con prefetch
+/// de 128B (ARM Neoverse, algunos Intel server). El layout DEBE coincidir
+/// bit-a-bit con la clase `ShmHeader` de Python (ctypes._align_=128).
+#[repr(C, align(128))]
+pub struct ShmHeader {
+    pub epoch:            AtomicU64,   //  0..7   Ã‰poca de la sesiÃ³n
+    pub seq:              AtomicU64,   //  8..15  NÃºmero de secuencia (SeqLock)
+    pub size:             AtomicU64,   // 16..23  TamaÃ±o del payload en bytes
+    pub state:            AtomicU32,   // 24..27  Estado del nodo (IDLE/READY/...)
+    pub _pad_state:       u32,         // 28..31  Padding explÃ­cito
+    pub last_heartbeat_ns: AtomicU64,  // 32..39  Timestamp del Ãºltimo heartbeat
+    pub _reserved:        [u8; 88],    // 40..127 Reservado para extensiones
+}
+
+const _: () = assert!(
+    std::mem::size_of::<ShmHeader>() == 128,
+    "ShmHeader debe ser exactamente 128 bytes"
+);
+
+// =============================================================================
+// Â§5  IBV_SEND_WR â€” FIX #31 (rkey en offset 48, no 52)
+// =============================================================================
+// Layout real de rdma-core en 64-bit:
+//   wr_id            @  0  u64    (8)
+//   next             @  8  *ptr   (8)
+//   sg_list          @ 16  *ptr   (8)
+//   num_sge          @ 24  i32    (4)
+//   opcode           @ 28  u32    (4)
+//   send_flags       @ 32  i32    (4)
+//   imm_data         @ 36  u32    (4)
+//   union wr         @ 40         (32 bytes â€” tamaÃ±o del variant atomic)
+//     rdma.remote_addr  @ 40  u64 (8)
+//     rdma.rkey         @ 48  u32 (4)  â† CORREGIDO (era 52 en V503)
+//   union qp_type    @ 72         (8)
+//   TOTAL = 80 bytes
+// =============================================================================
+
+/// Scatter/Gather Element para RDMA (InfiniBand verbs).
+#[cfg(unix)]
+#[repr(C)]
+pub struct ibv_sge {
+    pub addr:   u64,
+    pub length: u32,
+    pub lkey:   u32,
+}
+
+/// Work Request de envÃ­o RDMA. El layout replica EXACTAMENTE el de libibverbs
+/// en x86_64 Linux. La V503 tenÃ­a `rkey` en el offset 52, corrompiendo
+/// silenciosamente cada transmisiÃ³n RDMA.
+#[cfg(unix)]
+#[repr(C)]
+pub struct ibv_send_wr {
+    pub wr_id:        u64,               //  0..7
+    pub next:         *mut ibv_send_wr,   //  8..15
+    pub sg_list:      *mut ibv_sge,       // 16..23
+    pub num_sge:      i32,                // 24..27
+    pub opcode:       u32,                // 28..31
+    pub send_flags:   u32,                // 32..35
+    pub imm_data:     u32,                // 36..39
+    pub remote_addr:  u64,                // 40..47  (union wr.rdma)
+    pub rkey:         u32,                // 48..51  â† POSICIÃ“N CORRECTA
+    pub _pad_rdma:    u32,                // 52..55
+    pub _union_tail:  [u8; 16],           // 56..71  (espacio restante del union atomic)
+    pub _qp_type:     [u8; 8],            // 72..79  (union qp_type)
+}
+
+#[cfg(unix)]
+const _: () = assert!(
+    std::mem::size_of::<ibv_send_wr>() == 80,
+    "ibv_send_wr debe ser exactamente 80 bytes en 64-bit"
+);
+#[cfg(unix)]
+const _: () = assert!(
+    std::mem::offset_of!(ibv_send_wr, rkey) == 48,
+    "rkey DEBE estar en offset 48 (era 52 en V503 â€” BUG DE CORRUPCIÃ“N RDMA)"
+);
+
+// =============================================================================
+// Â§6  RDMA EXPORTS (solo Linux â€” InfiniBand verbs)
+// =============================================================================
+
+#[cfg(unix)]
+extern "C" {
+    fn ibv_reg_mr(pd: *mut u8, addr: *mut u8, len: usize, acc: i32) -> *mut u8;
+    fn ibv_dereg_mr(mr: *mut u8) -> i32;
+    fn ibv_post_send(qp: *mut u8, wr: *mut ibv_send_wr, bad: *mut *mut ibv_send_wr) -> i32;
+}
+
+#[cfg(unix)]
+static WR_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+/// Registra una regiÃ³n de VRAM (GPU) para acceso directo RDMA (GPUDirect).
+///
+/// # ParÃ¡metros
+/// - `pd`:   Protection Domain de InfiniBand (de ibv_alloc_pd).
+/// - `vram`: Puntero a la VRAM alineado a pÃ¡gina (4096 bytes).
+/// - `cap`:  TamaÃ±o de la regiÃ³n en bytes.
+///
+/// # Retorno
+/// Puntero al Memory Region (MR) registrado, o NULL en caso de error.
+///
+/// # Seguridad
+/// Requiere NVIDIA Tesla/Quadro/Ampere con GPUDirect habilitado.
+/// NO funciona con GeForce (limitaciÃ³n del driver).
+#[cfg(unix)]
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_rdma_register_vram(
+    pd: *mut u8, vram: *mut u8, cap: usize,
+) -> *mut u8 {
+    ffi_catch!(ptr::null_mut(), {
+        if pd.is_null() || vram.is_null() || cap == 0 { return ptr::null_mut(); }
+        if (vram as usize) % 4096 != 0 { return ptr::null_mut(); }
+        let mr = ibv_reg_mr(pd, vram, cap, 1 | 2 | 4); // LOCAL_WRITE|REMOTE_WRITE|REMOTE_READ
+        if mr.is_null() {
+            eprintln!(
+                "[PMTP] ibv_reg_mr fallÃ³ (errno={}). GPUDirect RDMA requiere Tesla/Quadro.",
+                std::io::Error::last_os_error()
+            );
+        }
+        mr
+    })
+}
+
+/// Inyecta un tensor vÃ­a RDMA WRITE al espacio de memoria remoto de otro nodo.
+///
+/// # ParÃ¡metros
+/// - `qp`:          Queue Pair de InfiniBand.
+/// - `mr`:          Memory Region local (de pmtp_rdma_register_vram).
+/// - `off`:         Offset dentro del MR local donde empieza el tensor.
+/// - `sz`:          TamaÃ±o del tensor en bytes.
+/// - `remote_addr`: DirecciÃ³n virtual en el nodo remoto.
+/// - `remote_rkey`: Remote Key del MR destino.
+///
+/// # Retorno
+/// `wr_id` (>0) si se enviÃ³ correctamente, cÃ³digo de error negativo si fallÃ³.
+#[cfg(unix)]
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_rdma_inject_tensor(
+    qp: *mut u8, mr: *mut u8,
+    off: usize, sz: usize,
+    remote_addr: u64, remote_rkey: u32,
+) -> i64 {
+    ffi_catch!(-99, {
+        if qp.is_null() || mr.is_null() || sz == 0 { return -1; }
+        if sz > u32::MAX as usize { return -4; }
+        if off.checked_add(sz).is_none() { return -2; }
+
+        let wr_id = WR_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let mr_addr = *(mr.add(16) as *const u64);
+        let mr_lkey = *(mr.add(36) as *const u32);
+        
+        let local_addr = mr_addr.wrapping_add(off as u64);
+        let mut sge = ibv_sge { addr: local_addr, length: sz as u32, lkey: mr_lkey };
+
+        let mut wr = ibv_send_wr {
+            wr_id,
+            next: ptr::null_mut(),
+            sg_list: &mut sge,
+            num_sge: 1,
+            opcode: 0,         // IBV_WR_RDMA_WRITE
+            send_flags: 2,     // IBV_SEND_SIGNALED
+            imm_data: 0,
+            remote_addr,
+            rkey: remote_rkey, // â† offset 48 (CORRECTO)
+            _pad_rdma: 0,
+            _union_tail: [0u8; 16],
+            _qp_type: [0u8; 8],
+        };
+
+        fence(Ordering::SeqCst); // Visibilidad para el NIC antes de post_send
+        let mut bad: *mut ibv_send_wr = ptr::null_mut();
+        if ibv_post_send(qp, &mut wr, &mut bad) != 0 { return -3; }
+        wr_id as i64
+    })
+}
+
+// =============================================================================
+// Â§7  SEQLOCK â€” FIX #40 (write_turn atÃ³mico independiente de seq)
+// =============================================================================
+
+/// Lock-free de doble buffer para publicar firmas de nodos sin bloqueo.
+///
+/// Protocolo del escritor:
+///   1. `begin_write()` â†’ seq se vuelve impar, write_turn se alterna
+///   2. escribir en el buffer retornado por `get_write_buffer()`
+///   3. `end_write()` â†’ seq se vuelve par
+///
+/// Protocolo del lector:
+///   1. Leer seq. Si es impar, esperar (escritura en progreso).
+///   2. Leer write_turn para determinar cuÃ¡l buffer tiene los datos mÃ¡s recientes.
+///   3. Leer los datos.
+///   4. Verificar que seq no cambiÃ³. Si cambiÃ³, reintentar.
+#[repr(C, align(64))]
+pub struct NodeSignatureSeqLock {
+    pub seq:        AtomicU64,    //  0..7   NÃºmero de secuencia
+    pub write_turn: AtomicU32,    //  8..11  Turno de escritura (0 o 1)
+    pub _pad:       u32,          // 12..15
+    pub sig_0:      *const u8,    // 16..23  Buffer de firma 0
+    pub sig_1:      *const u8,    // 24..31  Buffer de firma 1
+}
+
+/// Inicia una escritura atómica en el SeqLock.
+///
+/// V506 FIX C08: Usa CAS (Compare-and-Swap) para garantizar single-writer.
+/// Solo un escritor puede transicionar seq de par→impar. Si otro escritor
+/// intenta begin_write() concurrentemente, el CAS falla y retorna -2.
+///
+/// # Retorno
+/// El turno ANTERIOR (0 o 1) en caso de éxito, -1 si `lock` es NULL,
+/// -2 si otro writer ya tiene el lock, -99 si hubo pánico interno.
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_seqlock_begin_write(
+    lock: *mut NodeSignatureSeqLock,
+) -> i64 {
+    ffi_catch!(-99, {
+        if lock.is_null() { return -1; }
+        let l = &*lock;
+        // CAS: only succeed if seq is currently even (no writer active)
+        let current = l.seq.load(Ordering::Acquire);
+        if current & 1 != 0 { return -2; } // another writer active
+        match l.seq.compare_exchange(
+            current, current + 1,
+            Ordering::AcqRel, Ordering::Relaxed
+        ) {
+            Ok(_) => {
+                let old_turn = l.write_turn.fetch_xor(1, Ordering::AcqRel) & 1;
+                old_turn as i64
+            }
+            Err(_) => -2, // contention — another writer won the race
+        }
+    })
+}
+
+/// Finaliza una escritura atÃ³mica en el SeqLock.
+///
+/// Inserta un fence Release y luego incrementa `seq` a un valor par,
+/// seÃ±alizando que la escritura estÃ¡ completa y los datos son legibles.
+///
+/// # Retorno
+/// 1 en caso de Ã©xito, -1 si NULL, -99 si pÃ¡nico.
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_seqlock_end_write(
+    lock: *mut NodeSignatureSeqLock,
+) -> i64 {
+    ffi_catch!(-99, {
+        if lock.is_null() { return -1; }
+        let l = &*lock;
+        fence(Ordering::Release);
+        l.seq.fetch_add(1, Ordering::Release);
+        1
+    })
+}
+
+/// Retorna el puntero al buffer donde el escritor DEBE escribir.
+///
+/// La lÃ³gica es: si write_turn actual es 0 â†’ escribir en sig_1;
+/// si write_turn es 1 â†’ escribir en sig_0. Esto garantiza que el
+/// escritor siempre escribe en el buffer que el lector NO estÃ¡ leyendo.
+///
+/// # Retorno
+/// Puntero mutable al buffer destino, o NULL si lock es NULL.
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_seqlock_get_write_buffer(
+    lock: *const NodeSignatureSeqLock,
+) -> *mut u8 {
+    ffi_catch!(ptr::null_mut(), {
+        if lock.is_null() { return ptr::null_mut(); }
+        let l = &*lock;
+        let turn = l.write_turn.load(Ordering::Acquire) & 1;
+        if turn == 0 { l.sig_1 as *mut u8 } else { l.sig_0 as *mut u8 }
+    })
+}
+
+// =============================================================================
+// Â§8  DOT PRODUCT HELPERS â€” 3 modos de precisiÃ³n
+// =============================================================================
+
+/// Producto punto, ||t||Â², ||s||Â² en f64 con 4 acumuladores ILP.
+///
+/// Promover f32â†’f64 antes de acumular elimina la cancelaciÃ³n catastrÃ³fica
+/// inherente a sumas de 10,000 tÃ©rminos en f32 (error relativo cae de
+/// ~1e-3 a ~1e-12). Los 4 lanes paralelos permiten que el OoO del CPU
+/// ejecute 4 FMAs por ciclo en lugar de 1.
+#[inline(always)]
+unsafe fn dot_fp32_4way(t: *const f32, s: *const f32, dim: usize) -> (f64, f64, f64) {
+    let (mut d0, mut d1, mut d2, mut d3) = (0.0f64, 0.0, 0.0, 0.0);
+    let (mut n0, mut n1, mut n2, mut n3) = (0.0f64, 0.0, 0.0, 0.0);
+    let (mut m0, mut m1, mut m2, mut m3) = (0.0f64, 0.0, 0.0, 0.0);
+    let chunks = dim >> 2;
+    for i in 0..chunks {
+        let b = i << 2;
+        let (t0, t1, t2, t3) = (
+            *t.add(b) as f64, *t.add(b + 1) as f64,
+            *t.add(b + 2) as f64, *t.add(b + 3) as f64,
+        );
+        let (s0, sv1, s2, s3) = (
+            *s.add(b) as f64, *s.add(b + 1) as f64,
+            *s.add(b + 2) as f64, *s.add(b + 3) as f64,
+        );
+        d0 += t0 * s0; d1 += t1 * sv1; d2 += t2 * s2; d3 += t3 * s3;
+        n0 += t0 * t0; n1 += t1 * t1; n2 += t2 * t2; n3 += t3 * t3;
+        m0 += s0 * s0; m1 += sv1 * sv1; m2 += s2 * s2; m3 += s3 * s3;
+    }
+    let tail = chunks << 2;
+    for j in 0..(dim & 3) {
+        let tv = *t.add(tail + j) as f64;
+        let sv = *s.add(tail + j) as f64;
+        d0 += tv * sv; n0 += tv * tv; m0 += sv * sv;
+    }
+    ((d0 + d1) + (d2 + d3), (n0 + n1) + (n2 + n3), (m0 + m1) + (m2 + m3))
+}
+
+/// Producto punto para tensores BF16 (Brain Float 16).
+///
+/// Decodifica BF16â†’f32 inline (shift left 16 bits) y acumula en f64.
+/// BF16 tiene el mismo rango que f32 (8 bits de exponente) pero solo
+/// 7 bits de mantisa, por lo que la acumulaciÃ³n en f64 es obligatoria.
+#[inline(always)]
+unsafe fn dot_bf16(t: *const u16, s: *const u16, dim: usize) -> (f64, f64, f64) {
+    let (mut dot, mut nt, mut ns) = (0.0f64, 0.0f64, 0.0f64);
+    for i in 0..dim {
+        let tv = f32::from_bits((*t.add(i) as u32) << 16) as f64;
+        let sv = f32::from_bits((*s.add(i) as u32) << 16) as f64;
+        dot += tv * sv;
+        nt += tv * tv;
+        ns += sv * sv;
+    }
+    (dot, nt, ns)
+}
+
+/// Producto punto con sumaciÃ³n Kahan en 4 cadenas ILP independientes.
+///
+/// Cada cadena mantiene su propio compensador, permitiendo que LLVM
+/// vectorice las 4 cadenas en paralelo (a diferencia de Kahan serial
+/// que es inherentemente secuencial â€” FIX del falso claim de V503).
+#[inline(always)]
+unsafe fn dot_kahan_4way(t: *const f32, s: *const f32, dim: usize) -> (f64, f64, f64) {
+    // Macro interna para un paso Kahan: sum += val con compensaciÃ³n.
+    macro_rules! kahan {
+        ($sum:expr, $comp:expr, $val:expr) => {{
+            let y = $val - $comp;
+            let t2 = $sum + y;
+            $comp = (t2 - $sum) - y;
+            $sum = t2;
+        }};
+    }
+
+    let (mut da, mut db, mut dc, mut dd) = (0.0f32, 0.0, 0.0, 0.0);
+    let (mut ca, mut cb, mut cc, mut cd) = (0.0f32, 0.0, 0.0, 0.0);
+    let (mut na, mut nb, mut nc, mut nd) = (0.0f32, 0.0, 0.0, 0.0);
+    let (mut ea, mut eb, mut ec, mut ed) = (0.0f32, 0.0, 0.0, 0.0);
+    let (mut ma, mut mb, mut mc, mut md_) = (0.0f32, 0.0, 0.0, 0.0);
+    let (mut fa, mut fb, mut fc, mut fd) = (0.0f32, 0.0, 0.0, 0.0);
+
+    let chunks = dim >> 2;
+    for i in 0..chunks {
+        let b = i << 2;
+        let (t0, t1, t2, t3) = (*t.add(b), *t.add(b+1), *t.add(b+2), *t.add(b+3));
+        let (s0, s1, s2, s3) = (*s.add(b), *s.add(b+1), *s.add(b+2), *s.add(b+3));
+        kahan!(da, ca, t0*s0); kahan!(db, cb, t1*s1);
+        kahan!(dc, cc, t2*s2); kahan!(dd, cd, t3*s3);
+        kahan!(na, ea, t0*t0); kahan!(nb, eb, t1*t1);
+        kahan!(nc, ec, t2*t2); kahan!(nd, ed, t3*t3);
+        kahan!(ma, fa, s0*s0); kahan!(mb, fb, s1*s1);
+        kahan!(mc, fc, s2*s2); kahan!(md_, fd, s3*s3);
+    }
+    let tail = chunks << 2;
+    for j in 0..(dim & 3) {
+        let tv = *t.add(tail + j);
+        let sv = *s.add(tail + j);
+        kahan!(da, ca, tv * sv);
+        kahan!(na, ea, tv * tv);
+        kahan!(ma, fa, sv * sv);
+    }
+    (
+        ((da + db) + (dc + dd)) as f64,
+        ((na + nb) + (nc + nd)) as f64,
+        ((ma + mb) + (mc + md_)) as f64,
+    )
+}
+
+// =============================================================================
+// Â§9  SU(2) ROUTER â€” Enrutador de similitud coseno con SeqLock
+// =============================================================================
+
+/// Calcula la similitud coseno entre un tensor de entrada y la firma
+/// publicada en un SeqLock, usando el modo de precisiÃ³n indicado.
+///
+/// # ParÃ¡metros
+/// - `tensor_ptr`: Tensor de entrada (f32 si precision=0,2; u16 BF16 si precision=1).
+/// - `lock`:       Puntero al SeqLock que contiene la firma del nodo destino.
+/// - `dim`:        Dimensionalidad del tensor (ej. 10,000).
+/// - `precision`:  0=FP32 (4-way f64), 1=BF16, 2=FP32 Kahan.
+/// - `out`:        Puntero donde se escribe el coseno resultante âˆˆ [-1, 1].
+///
+/// # Retorno
+/// 0 si OK, -1 si punteros nulos, -4 si precisiÃ³n invÃ¡lida,
+/// -5 si se excediÃ³ el lÃ­mite de reintentos, -6 si dim > 1M, -99 si pÃ¡nico.
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_route_tensor_su2_seqlock(
+    tensor_ptr: *const u8,
+    lock: *const NodeSignatureSeqLock,
+    dim: usize,
+    precision: u8,
+    out: *mut f32,
+) -> i32 {
+    ffi_catch!(-99, {
+        if tensor_ptr.is_null() || lock.is_null() || dim == 0 || out.is_null() {
+            return -1;
+        }
+        if dim > (1 << 20) { return -6; }
+        if precision > 2 { return -4; }
+
+        with_ftz_daz(|| {
+            let l = &*lock;
+            const SPIN: u64 = 1024;
+            const MAX_ITER: u64 = 100_000_000;
+            let mut it: u64 = 0;
+
+            // Variables para almacenar el resultado validado del SeqLock
+            let mut final_dot = 0.0f64;
+            let mut final_nt = 0.0f64;
+            let mut final_ns = 0.0f64;
+
+            loop {
+                // Paso 1: Leer seq. Si es impar, escritura en progreso â†’ esperar.
+                let s1 = l.seq.load(Ordering::Acquire);
+                if s1 & 1 != 0 {
+                    it += 1;
+                    if it > MAX_ITER { return -5; }
+                    if it < SPIN { std::hint::spin_loop(); } else { yield_thread(); }
+                    continue;
+                }
+                fence(Ordering::Acquire);
+
+                // Paso 2: Determinar cuÃ¡l buffer tiene los datos mÃ¡s recientes.
+                // Tras un end_write, write_turn apunta al buffer reciÃ©n escrito:
+                //   write_turn=0 â†’ Ãºltimo write fue a sig_1
+                //   write_turn=1 â†’ Ãºltimo write fue a sig_0
+                let turn = l.write_turn.load(Ordering::Acquire) & 1;
+                let s_ptr = if turn == 0 { l.sig_1 } else { l.sig_0 };
+                if s_ptr.is_null() { return -1; }
+
+                // Paso 3: Calcular dot, ||t||Â², ||s||Â² segÃºn precisiÃ³n
+                let (dot, nt, ns) = match precision {
+                    0 => dot_fp32_4way(tensor_ptr as *const f32, s_ptr as *const f32, dim),
+                    1 => dot_bf16(tensor_ptr as *const u16, s_ptr as *const u16, dim),
+                    2 => dot_kahan_4way(tensor_ptr as *const f32, s_ptr as *const f32, dim),
+                    _ => return -4,
+                };
+
+                // Paso 4: Verificar que seq no cambiÃ³ durante la lectura.
+                fence(Ordering::Acquire);
+                if l.seq.load(Ordering::Acquire) == s1 {
+                    final_dot = dot;
+                    final_nt = nt;
+                    final_ns = ns;
+                    break;
+                }
+
+                // seq cambiÃ³ â†’ los datos pueden estar corruptos, reintentar
+                it += 1;
+                if it > MAX_ITER { return -5; }
+                if it < SPIN { std::hint::spin_loop(); } else { yield_thread(); }
+            }
+
+            // Paso 5: Calcular similitud coseno = dot / sqrt(||t||Â² Â· ||s||Â²)
+            let denom = (final_nt * final_ns).sqrt();
+            let cos = if denom > 1e-15 {
+                (final_dot / denom) as f32
+            } else {
+                0.0f32
+            };
+            // Clamp a [-1, 1] para evitar artefactos numÃ©ricos
+            *out = cos.clamp(-1.0, 1.0);
+            0
+        })
+    })
+}
+
+// =============================================================================
+// Â§10  BETTI-1 â€” ValidaciÃ³n topolÃ³gica con Union-Find â€” FIX #45 (alignment)
+// =============================================================================
+
+/// Calcula el primer nÃºmero de Betti (Î²â‚) de un grafo usando Union-Find
+/// con compresiÃ³n de caminos y uniÃ³n por rango.
+///
+/// Î²â‚ = num_edges - num_vertices + num_components
+///
+/// Un Î²â‚ > 0 indica que el grafo tiene ciclos (bueno: la topologÃ­a del
+/// espacio latente es no-trivial y puede codificar informaciÃ³n semÃ¡ntica).
+/// Un Î²â‚ = 0 indica un bosque (malo: la topologÃ­a colapsÃ³).
+///
+/// # ParÃ¡metros
+/// - `edges`:          Puntero a pares (u, v) de vÃ©rtices. Layout: [u0,v0,u1,v1,...].
+/// - `num_edges`:      NÃºmero de aristas.
+/// - `num_vertices`:   NÃºmero de vÃ©rtices.
+/// - `scratch_parent`: Buffer temporal para Union-Find (mÃ­nimo `num_vertices` u32).
+/// - `scratch_rank`:   Buffer temporal para rangos (mÃ­nimo `num_vertices` u8).
+/// - `scratch_len`:    TamaÃ±o de los buffers (debe ser â‰¥ num_vertices).
+///
+/// # Retorno
+/// Î²â‚ (â‰¥0) si OK.
+/// -1 si Î²â‚ negativo (imposible en grafo vÃ¡lido). -2 si edges es NULL.
+/// -3 si num_vertices=0. -4 si num_edges > mÃ¡ximo teÃ³rico.
+/// -5 si un vÃ©rtice referenciado no existe. -6/-7 si scratch es NULL/corto.
+/// -8 si algÃºn puntero tiene alineaciÃ³n incorrecta (FIX #45).
+/// -99 si pÃ¡nico.
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_validate_betti_1_v2(
+    edges: *const u32,
+    num_edges: usize,
+    num_vertices: usize,
+    scratch_parent: *mut u32,
+    scratch_rank: *mut u8,
+    scratch_len: usize,
+) -> i32 {
+    ffi_catch!(-99, {
+        if num_vertices == 0 { return -3; }
+        if edges.is_null() && num_edges > 0 { return -2; }
+        if num_vertices > (1 << 20) { return -1; }
+        if scratch_parent.is_null() || scratch_rank.is_null() { return -6; }
+        if scratch_len < num_vertices { return -7; }
+
+        // FIX #45 â€” Validar alineaciÃ³n ANTES de construir slices.
+        // from_raw_parts con punteros desalineados es UB en Rust.
+        if (scratch_parent as usize) % core::mem::align_of::<u32>() != 0 { return -8; }
+        if (scratch_rank  as usize) % core::mem::align_of::<u8>()  != 0 { return -8; }
+        if num_edges > 0 && (edges as usize) % core::mem::align_of::<u32>() != 0 { return -8; }
+
+        let max_edges = (num_vertices as u128) * ((num_vertices as u128) - 1) / 2;
+        if (num_edges as u128) > max_edges { return -4; }
+
+        let parent = core::slice::from_raw_parts_mut(scratch_parent, num_vertices);
+        let rank = core::slice::from_raw_parts_mut(scratch_rank, num_vertices);
+        for i in 0..num_vertices {
+            parent[i] = i as u32;
+            rank[i] = 0;
+        }
+
+        /// Find con compresiÃ³n de caminos (path halving).
+        #[inline(always)]
+        fn find(p: &mut [u32], mut x: u32) -> u32 {
+            while p[x as usize] != x {
+                p[x as usize] = p[p[x as usize] as usize]; // path halving
+                x = p[x as usize];
+            }
+            x
+        }
+
+        /// Union por rango. Retorna true si se unieron dos componentes distintas.
+        #[inline(always)]
+        fn union(p: &mut [u32], r: &mut [u8], a: u32, b: u32) -> bool {
+            let ra = find(p, a);
+            let rb = find(p, b);
+            if ra == rb { return false; }
+            if r[ra as usize] < r[rb as usize] {
+                p[ra as usize] = rb;
+            } else if r[ra as usize] > r[rb as usize] {
+                p[rb as usize] = ra;
+            } else {
+                p[rb as usize] = ra;
+                r[ra as usize] += 1;
+            }
+            true
+        }
+
+        let mut components = num_vertices;
+        for i in 0..num_edges {
+            let u = *edges.add(i * 2);
+            let v = *edges.add(i * 2 + 1);
+            if u as usize >= num_vertices || v as usize >= num_vertices { return -5; }
+            if union(parent, rank, u, v) { components -= 1; }
+        }
+
+        let betti = (num_edges as i64) - (num_vertices as i64) + (components as i64);
+        if betti < 0 { return -1; }
+        betti as i32
+    })
+}
+
+// =============================================================================
+// Â§11  FASE 13 â€” HORIZONTAL LIFT (Fiber Bundle: 2D â†’ 10,000D)
+// =============================================================================
+
+/// Inyecta una perturbaciÃ³n semÃ¡ntica de 2 dimensiones (arrastre del mouse
+/// en la UI Flutter/Dart) en el espacio latente de alta dimensiÃ³n (D=10,000)
+/// usando la pseudo-inversa del Jacobiano de proyecciÃ³n.
+///
+/// # MatemÃ¡tica
+/// Sea J âˆˆ â„^{2Ã—D} el Jacobiano de la proyecciÃ³n en el punto actual.
+/// El Levantamiento Horizontal calcula:
+///
+///   Î”_ND = Jáµ€ (J Jáµ€)â»Â¹ Î”z
+///
+/// donde Î”z = (delta_x, delta_y) es el vector de arrastre 2D del humano.
+/// Como (J Jáµ€) es una matriz 2Ã—2, su inversiÃ³n es O(1) y el cÃ¡lculo
+/// total es O(D) â€” microsegundos para D=10,000.
+///
+/// Tras aplicar Î”_ND al tensor, se re-normaliza a S^{D-1} para preservar
+/// la geometrÃ­a unitaria SU(2) del espacio latente.
+///
+/// # ParÃ¡metros
+/// - `tensor_ptr`:   Tensor latente mutable (D floats en S^{D-1}).
+/// - `jacobian_ptr`: Jacobiano de proyecciÃ³n (2 filas Ã— D columnas, row-major).
+/// - `d_dim`:        Dimensionalidad D (ej. 10,000).
+/// - `delta_x`:      Componente X del arrastre 2D del humano.
+/// - `delta_y`:      Componente Y del arrastre 2D del humano.
+///
+/// # Retorno
+/// 0 si OK, -1 punteros nulos, -2 dim=0, -3 Jacobiano singular, -99 pÃ¡nico.
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_apply_horizontal_lift(
+    tensor_ptr: *mut f32,
+    jacobian_ptr: *const f32,
+    d_dim: usize,
+    delta_x: f32,
+    delta_y: f32,
+) -> i32 {
+    ffi_catch!(-99, {
+        if tensor_ptr.is_null() || jacobian_ptr.is_null() { return -1; }
+        if d_dim == 0 { return -2; }
+        // V506 FIX C10: reject NaN/Inf inputs that would poison the tensor
+        if !delta_x.is_finite() || !delta_y.is_finite() { return -7; }
+
+        let tensor = core::slice::from_raw_parts_mut(tensor_ptr, d_dim);
+        let j_x = core::slice::from_raw_parts(jacobian_ptr, d_dim);
+        let j_y = core::slice::from_raw_parts(jacobian_ptr.add(d_dim), d_dim);
+
+        // 1. Calcular M = J Jáµ€ (matriz 2Ã—2 simÃ©trica)
+        let mut a = 0.0f64; // Jx Â· Jx
+        let mut b = 0.0f64; // Jx Â· Jy
+        let mut d = 0.0f64; // Jy Â· Jy
+        for i in 0..d_dim {
+            let jxi = j_x[i] as f64;
+            let jyi = j_y[i] as f64;
+            a += jxi * jxi;
+            b += jxi * jyi;
+            d += jyi * jyi;
+        }
+
+        // 2. Invertir M = [[a,b],[b,d]] â†’ det = aÂ·d - bÂ²
+        let det = a * d - b * b;
+        if det.abs() < 1e-12 { return -3; } // Jacobiano singular â†’ proyecciÃ³n degenerada
+
+        let inv_det = 1.0 / det;
+        let inv_a =  d * inv_det;
+        let inv_b = -b * inv_det;
+        let inv_d =  a * inv_det;
+
+        // 3. p = Mâ»Â¹ Â· Î”z
+        let dx = delta_x as f64;
+        let dy = delta_y as f64;
+        let p_x = inv_a * dx + inv_b * dy;
+        let p_y = inv_b * dx + inv_d * dy;
+
+        // 4. Î”_ND = Jáµ€ Â· p  y aplicar al tensor: tensor += Î”_ND
+        let mut norm_sq = 0.0f64;
+        let mut c_norm = 0.0f64;
+        for i in 0..d_dim {
+            let delta_nd = (j_x[i] as f64) * p_x + (j_y[i] as f64) * p_y;
+            tensor[i] += delta_nd as f32;
+            let val = (tensor[i] as f64) * (tensor[i] as f64);
+            let y = val - c_norm;
+            let t = norm_sq + y;
+            c_norm = (t - norm_sq) - y;
+            norm_sq = t;
+        }
+
+        // V506 FIX H17: reject if norm_sq is NaN/Inf after lift
+        if !norm_sq.is_finite() { return -7; }
+
+        // 5. Re-normalizar a S^{D-1} (preservar geometrÃ­a unitaria)
+        if norm_sq > 1e-12 {
+            let inv_norm = (1.0 / norm_sq.sqrt()) as f32;
+            for i in 0..d_dim {
+                tensor[i] *= inv_norm;
+            }
+        }
+
+        0
+    })
+}
+
+// =============================================================================
+// Â§12  FASE 99 â€” SWARM CONSENSUS (Olfati-Saber + CBF Anti-Echo-Chamber)
+// =============================================================================
+
+/// Aplica un paso de consenso descentralizado sobre el tensor latente local
+/// basÃ¡ndose en los tensores de los vecinos leÃ­dos vÃ­a Zero-Copy IPC (PMTP).
+///
+/// # Algoritmo
+/// 1. **Protocolo Olfati-Saber:** u_i = Î£ a_ij Â· (x_j âˆ’ x_i)
+///    Cada vecino j "tira" del agente i hacia sÃ­, ponderado por el peso
+///    de la arista a_ij de la matriz de adyacencia.
+///
+/// 2. **Control Barrier Function (CBF):** Previene el colapso al centroide
+///    ("Echo Chamber"). Si el gradiente de consenso empuja al agente hacia
+///    una zona de colapso angular (violaciÃ³n CBF h(x) â‰¥ 0), se proyecta
+///    el gradiente al espacio permisible.
+///
+/// 3. **IntegraciÃ³n de Euler:** x_i += dt Â· u_i
+///
+/// 4. **Re-normalizaciÃ³n a S^{D-1}.**
+///
+/// # ParÃ¡metros
+/// - `local_tensor`:     Estado mental del agente (D floats, mutable).
+/// - `neighbor_tensors`:  Tensores de K vecinos (K Ã— D floats, contiguo).
+/// - `neighbor_weights`:  Pesos a_ij de la matriz de adyacencia (K floats).
+/// - `num_neighbors`:     NÃºmero de vecinos K.
+/// - `d_dim`:             Dimensionalidad D.
+/// - `step_size`:         Tasa de integraciÃ³n dt (ej. 0.01).
+/// - `cbf_gamma`:         Margen del CBF (ej. 0.1). MÃ¡s alto = mÃ¡s diversidad.
+///
+/// # Retorno
+/// 0 si OK, -1 punteros nulos, -99 pÃ¡nico.
+#[no_mangle]
+pub unsafe extern "C" fn pmtp_phase99_swarm_consensus(
+    local_tensor: *mut f32,
+    neighbor_tensors: *const f32,
+    neighbor_weights: *const f32,
+    num_neighbors: usize,
+    d_dim: usize,
+    step_size: f32,
+    cbf_gamma: f32,
+) -> i32 {
+    ffi_catch!(-99, {
+        if local_tensor.is_null() { return -1; }
+        if num_neighbors > 0 && (neighbor_tensors.is_null() || neighbor_weights.is_null()) {
+            return -1;
+        }
+        if d_dim == 0 { return -1; }
+        // V506 FIX C10: reject NaN/Inf params that poison the swarm
+        if !step_size.is_finite() || !cbf_gamma.is_finite() { return -7; }
+        if step_size <= 0.0 || cbf_gamma <= 0.0 { return -8; }
+
+        let local = core::slice::from_raw_parts_mut(local_tensor, d_dim);
+        // V506 FIX H18: prevent overflow in slice length calculation
+        let total_elems = match num_neighbors.checked_mul(d_dim) {
+            Some(v) => v,
+            None => return -9, // overflow
+        };
+        let n_tensors = core::slice::from_raw_parts(neighbor_tensors, total_elems);
+        let weights = core::slice::from_raw_parts(neighbor_weights, num_neighbors);
+
+        // Gradiente de consenso u_i (alojado en heap â€” en producciÃ³n usar slab allocator)
+        let mut u_i = vec![0.0f32; d_dim];
+
+        // 1. Protocolo Olfati-Saber: u_i = Î£ a_ij Â· (x_j âˆ’ x_i)
+        for k in 0..num_neighbors {
+            let w = weights[k];
+            let offset = k * d_dim;
+            for i in 0..d_dim {
+                u_i[i] += w * (n_tensors[offset + i] - local[i]);
+            }
+        }
+
+        // 2. Control Barrier Function â€” proyectar si viola la barrera
+        //    h(x) = distancia_angular_al_centroide - gamma â‰¥ 0
+        //    Si <local, u_i> < -gamma â†’ el gradiente empuja al colapso
+        let mut centroid_dot = 0.0f64;
+        let mut local_norm_sq = 0.0f64;
+        let mut c_centroid = 0.0f64;
+        let mut c_local_norm = 0.0f64;
+        for i in 0..d_dim {
+            let val_c = (local[i] as f64) * (u_i[i] as f64);
+            let y_c = val_c - c_centroid;
+            let t_c = centroid_dot + y_c;
+            c_centroid = (t_c - centroid_dot) - y_c;
+            centroid_dot = t_c;
+
+            let val_n = (local[i] as f64) * (local[i] as f64);
+            let y_n = val_n - c_local_norm;
+            let t_n = local_norm_sq + y_n;
+            c_local_norm = (t_n - local_norm_sq) - y_n;
+            local_norm_sq = t_n;
+        }
+
+        let gamma_f64 = cbf_gamma as f64;
+        if centroid_dot < -gamma_f64 {
+            // ProyecciÃ³n QP reducida: restar la componente que viola la barrera
+            let alpha = (-gamma_f64 - centroid_dot) / local_norm_sq.max(1e-8);
+            for i in 0..d_dim {
+                u_i[i] += (alpha as f32) * local[i];
+            }
+        }
+
+        // 3. IntegraciÃ³n de Euler: x_i += dt Â· u_i
+        let mut norm_sq = 0.0f64;
+        let mut c_norm = 0.0f64;
+        for i in 0..d_dim {
+            local[i] += step_size * u_i[i];
+            let val = (local[i] as f64) * (local[i] as f64);
+            let y = val - c_norm;
+            let t = norm_sq + y;
+            c_norm = (t - norm_sq) - y;
+            norm_sq = t;
+        }
+
+        // 4. Re-normalizaciÃ³n a S^{D-1}
+        if norm_sq > 1e-12 {
+            let inv_norm = (1.0 / norm_sq.sqrt()) as f32;
+            for i in 0..d_dim {
+                local[i] *= inv_norm;
+            }
+        }
+
+        0
+    })
+}
+

@@ -1,0 +1,13 @@
+_HISTORICO
+models
+__pycache__
+matrix_state
+REPROCESO
+*.mp4
+*.pptx
+*.dll
+*.exe
+*.pdb
+*.lib
+*.exp
+.cache

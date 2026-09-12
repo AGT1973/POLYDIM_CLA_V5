@@ -1,0 +1,23 @@
+===== POLYDIM V507 REDTEAM TEST OUTPUT =====
+PASS | python_imports | monolith imports
+PASS | shm_header_layout | size=128 align=128
+PASS | dll_name_collision | Rust and C++ use same DLL basename
+PASS | mock_missing_dll | missing native libraries are converted to None
+PASS | hardware_query_hardcoded | hardware query is constant and C++ binding is empty
+PASS | slab_python_atomic_claim | ctypes integer access is used as claimed atomic operation
+PASS | kahan_not_f64 | Kahan lanes/compensators are f32
+PASS | consensus_heap_alloc | per-call heap allocation
+PASS | lift_checks_params_not_tensor | tensor/J finite values not validated before mutation
+PASS | rdma_manual_abi | manual ABI offsets
+PASS | triton_clone_alloc | per-request output copy/allocation
+PASS | triton_shared_async_lock | lock shared across event loops
+PASS | triton_nan_unchecked | no explicit NaN/Inf validation
+PASS | triton_one_stream | single stream serializes work
+PASS | kahan_numeric_poc | ref=100003333.000000 current_f32=100000000.000000 proposed_f64=100003333.000000
+PASS | lift_partial_mutation_model | current ordering permits partial mutation before -7
+PASS | consensus_nan_model | NaN can pass through to success path
+PASS | python_compile | 
+PASS | cpp_linux_syntax | 
+FINDING | rust_build_available | rustc not installed in audit container
+PASS | slab_baseline_bench | roundtrip_us_p50=21.7 p95=35.8 min=21.3 max=343.2
+===== END OUTPUT =====
