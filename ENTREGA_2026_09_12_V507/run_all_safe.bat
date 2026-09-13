@@ -1,0 +1,13 @@
+﻿echo "=== INICIANDO NODO A (OCCIDENTE) ==="
+python E:\POLYDIM_EINSOF\ENTREGA_2026_09_12_V507\generar_nodo_A.py
+echo "=== NODO A DESTRUIDO, LIBERANDO 100% DE RAM OS ==="
+
+echo "=== INICIANDO NODO B (ORIENTE) ==="
+python E:\POLYDIM_EINSOF\ENTREGA_2026_09_12_V507\generar_nodo_B.py
+echo "=== NODO B DESTRUIDO, LIBERANDO 100% DE RAM OS ==="
+
+echo "=== ENSAMBLANDO EL CODIGO CRUZADO ==="
+python E:\POLYDIM_EINSOF\ENTREGA_2026_09_12_V507\ensamblador_historico.py
+
+echo "=== EJECUTANDO EL ENSAMBLADO FINAL ==="
+python E:\POLYDIM_EINSOF\ENTREGA_2026_09_12_V507\consenso_ciego_final.py

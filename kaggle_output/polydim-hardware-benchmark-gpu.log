@@ -1,0 +1,157 @@
+[{"stream_name":"stdout","time":1.237066085,"data":"[*] Iniciando Benchmark Kaggle POLYDIM - Node A Tensor Generation (V508)\n"}
+,{"stream_name":"stdout","time":1.3194464240000001,"data":"[OK] Tensor de 10000 dimensiones exportado a kaggle_export/tensor_node_a.bin.\n"}
+,{"stream_name":"stdout","time":1.319476465,"data":"[*] Creando dataset vía kaggle API localmente en el runner de la nube...\n"}
+,{"stream_name":"stderr","time":34.900430355,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":34.900466219,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connection.py\", line 198, in _new_conn\n"}
+,{"stream_name":"stderr","time":34.90182331,"data":"    sock = connection.create_connection(\n"}
+,{"stream_name":"stderr","time":34.901849067,"data":"           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.901855969,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/util/connection.py\", line 60, in create_connection\n"}
+,{"stream_name":"stderr","time":34.90245599,"data":"    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):\n"}
+,{"stream_name":"stderr","time":34.902562997,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.90258642,"data":"  File \"/usr/lib/python3.12/socket.py\", line 978, in getaddrinfo\n"}
+,{"stream_name":"stderr","time":34.904246891,"data":"    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):\n"}
+,{"stream_name":"stderr","time":34.904270899,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.904277696,"data":"socket.gaierror: [Errno -3] Temporary failure in name resolution\n"}
+,{"stream_name":"stderr","time":34.904283787,"data":"\n"}
+,{"stream_name":"stderr","time":34.904289631,"data":"The above exception was the direct cause of the following exception:\n"}
+,{"stream_name":"stderr","time":34.904295866,"data":"\n"}
+,{"stream_name":"stderr","time":34.904300156,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":34.904304345,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 787, in urlopen\n"}
+,{"stream_name":"stderr","time":34.906284215,"data":"    response = self._make_request(\n"}
+,{"stream_name":"stderr","time":34.906319281,"data":"               ^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.906326415,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 488, in _make_request\n"}
+,{"stream_name":"stderr","time":34.906590772,"data":"    raise new_e\n"}
+,{"stream_name":"stderr","time":34.906613915,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 464, in _make_request\n"}
+,{"stream_name":"stderr","time":34.906732892,"data":"    self._validate_conn(conn)\n"}
+,{"stream_name":"stderr","time":34.9067417,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 1093, in _validate_conn\n"}
+,{"stream_name":"stderr","time":34.90708294,"data":"    conn.connect()\n"}
+,{"stream_name":"stderr","time":34.907094173,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connection.py\", line 753, in connect\n"}
+,{"stream_name":"stderr","time":34.907355583,"data":"    self.sock = sock = self._new_conn()\n"}
+,{"stream_name":"stderr","time":34.907365915,"data":"                       ^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.907372025,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connection.py\", line 205, in _new_conn\n"}
+,{"stream_name":"stderr","time":34.907705545,"data":"    raise NameResolutionError(self.host, self, e) from e\n"}
+,{"stream_name":"stderr","time":34.907746438,"data":"urllib3.exceptions.NameResolutionError: \u003curllib3.connection.HTTPSConnection object at 0x7ea5a301d100\u003e: Failed to resolve 'api.kaggle.com' ([Errno -3] Temporary failure in name resolution)\n"}
+,{"stream_name":"stderr","time":34.907756463,"data":"\n"}
+,{"stream_name":"stderr","time":34.907761264,"data":"The above exception was the direct cause of the following exception:\n"}
+,{"stream_name":"stderr","time":34.907766758,"data":"\n"}
+,{"stream_name":"stderr","time":34.907771358,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":34.90777622,"data":"  File \"/usr/local/lib/python3.12/dist-packages/requests/adapters.py\", line 667, in send\n"}
+,{"stream_name":"stderr","time":34.909615037,"data":"    resp = conn.urlopen(\n"}
+,{"stream_name":"stderr","time":34.909639462,"data":"           ^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.909645082,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 841, in urlopen\n"}
+,{"stream_name":"stderr","time":34.909969713,"data":"    retries = retries.increment(\n"}
+,{"stream_name":"stderr","time":34.909985125,"data":"              ^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.909990481,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/util/retry.py\", line 519, in increment\n"}
+,{"stream_name":"stderr","time":34.9113018,"data":"    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]\n"}
+,{"stream_name":"stderr","time":34.911326059,"data":"    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.91133243,"data":"urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.kaggle.com', port=443): Max retries exceeded with url: /v1/security.OAuthService/IntrospectToken (Caused by NameResolutionError(\"\u003curllib3.connection.HTTPSConnection object at 0x7ea5a301d100\u003e: Failed to resolve 'api.kaggle.com' ([Errno -3] Temporary failure in name resolution)\"))\n"}
+,{"stream_name":"stderr","time":34.911356982,"data":"\n"}
+,{"stream_name":"stderr","time":34.911362366,"data":"During handling of the above exception, another exception occurred:\n"}
+,{"stream_name":"stderr","time":34.911367389,"data":"\n"}
+,{"stream_name":"stderr","time":34.911371782,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":34.91138817,"data":"  File \"/usr/local/bin/kaggle\", line 4, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":34.91165913,"data":"    from kaggle.cli import main\n"}
+,{"stream_name":"stderr","time":34.911672169,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/__init__.py\", line 10, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":34.911678799,"data":"    api.authenticate()\n"}
+,{"stream_name":"stderr","time":34.91168361,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/api/kaggle_api_extended.py\", line 761, in authenticate\n"}
+,{"stream_name":"stderr","time":34.912014735,"data":"    if self._authenticate_with_access_token():\n"}
+,{"stream_name":"stderr","time":34.912021923,"data":"       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.912026969,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/api/kaggle_api_extended.py\", line 819, in _authenticate_with_access_token\n"}
+,{"stream_name":"stderr","time":34.912313005,"data":"    username = self._introspect_token(access_token)\n"}
+,{"stream_name":"stderr","time":34.912319888,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.9123559,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/api/kaggle_api_extended.py\", line 859, in _introspect_token\n"}
+,{"stream_name":"stderr","time":34.912652851,"data":"    response = kaggle.security.oauth_client.introspect_token(request)\n"}
+,{"stream_name":"stderr","time":34.912671003,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.912676018,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kagglesdk/security/services/oauth_service.py\", line 44, in introspect_token\n"}
+,{"stream_name":"stderr","time":34.912798304,"data":"    return self._client.call(\"security.OAuthService\", \"IntrospectToken\", request, IntrospectTokenResponse)\n"}
+,{"stream_name":"stderr","time":34.91289776,"data":"           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.912905514,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kagglesdk/kaggle_http_client.py\", line 96, in call\n"}
+,{"stream_name":"stderr","time":34.912992463,"data":"    http_response = self._session.send(http_request, **settings)\n"}
+,{"stream_name":"stderr","time":34.913064333,"data":"                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.913080378,"data":"  File \"/usr/local/lib/python3.12/dist-packages/requests/sessions.py\", line 703, in send\n"}
+,{"stream_name":"stderr","time":34.914981562,"data":"    r = adapter.send(request, **kwargs)\n"}
+,{"stream_name":"stderr","time":34.915005643,"data":"        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":34.915011366,"data":"  File \"/usr/local/lib/python3.12/dist-packages/requests/adapters.py\", line 700, in send\n"}
+,{"stream_name":"stderr","time":34.915221576,"data":"    raise ConnectionError(e, request=request)\n"}
+,{"stream_name":"stderr","time":34.915230406,"data":"requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.kaggle.com', port=443): Max retries exceeded with url: /v1/security.OAuthService/IntrospectToken (Caused by NameResolutionError(\"\u003curllib3.connection.HTTPSConnection object at 0x7ea5a301d100\u003e: Failed to resolve 'api.kaggle.com' ([Errno -3] Temporary failure in name resolution)\"))\n"}
+,{"stream_name":"stderr","time":67.481948626,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":67.481984663,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connection.py\", line 198, in _new_conn\n"}
+,{"stream_name":"stderr","time":67.482100463,"data":"    sock = connection.create_connection(\n"}
+,{"stream_name":"stderr","time":67.482124325,"data":"           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.482131051,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/util/connection.py\", line 60, in create_connection\n"}
+,{"stream_name":"stderr","time":67.482229053,"data":"    for res in socket.getaddrinfo(host, port, family, socket.SOCK_STREAM):\n"}
+,{"stream_name":"stderr","time":67.482317653,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.482332649,"data":"  File \"/usr/lib/python3.12/socket.py\", line 978, in getaddrinfo\n"}
+,{"stream_name":"stderr","time":67.482691876,"data":"    for res in _socket.getaddrinfo(host, port, family, type, proto, flags):\n"}
+,{"stream_name":"stderr","time":67.482723622,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.482730373,"data":"socket.gaierror: [Errno -3] Temporary failure in name resolution\n"}
+,{"stream_name":"stderr","time":67.482736521,"data":"\n"}
+,{"stream_name":"stderr","time":67.482757003,"data":"The above exception was the direct cause of the following exception:\n"}
+,{"stream_name":"stderr","time":67.482762346,"data":"\n"}
+,{"stream_name":"stderr","time":67.482766605,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":67.482790111,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 787, in urlopen\n"}
+,{"stream_name":"stderr","time":67.483127077,"data":"    response = self._make_request(\n"}
+,{"stream_name":"stderr","time":67.483143038,"data":"               ^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.483148797,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 488, in _make_request\n"}
+,{"stream_name":"stderr","time":67.483306604,"data":"    raise new_e\n"}
+,{"stream_name":"stderr","time":67.483313336,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 464, in _make_request\n"}
+,{"stream_name":"stderr","time":67.483681805,"data":"    self._validate_conn(conn)\n"}
+,{"stream_name":"stderr","time":67.483712225,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 1093, in _validate_conn\n"}
+,{"stream_name":"stderr","time":67.483987104,"data":"    conn.connect()\n"}
+,{"stream_name":"stderr","time":67.483995034,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connection.py\", line 753, in connect\n"}
+,{"stream_name":"stderr","time":67.484280952,"data":"    self.sock = sock = self._new_conn()\n"}
+,{"stream_name":"stderr","time":67.484287624,"data":"                       ^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.484292466,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connection.py\", line 205, in _new_conn\n"}
+,{"stream_name":"stderr","time":67.48448072,"data":"    raise NameResolutionError(self.host, self, e) from e\n"}
+,{"stream_name":"stderr","time":67.484492176,"data":"urllib3.exceptions.NameResolutionError: \u003curllib3.connection.HTTPSConnection object at 0x780eb952dc40\u003e: Failed to resolve 'api.kaggle.com' ([Errno -3] Temporary failure in name resolution)\n"}
+,{"stream_name":"stderr","time":67.484498294,"data":"\n"}
+,{"stream_name":"stderr","time":67.484502911,"data":"The above exception was the direct cause of the following exception:\n"}
+,{"stream_name":"stderr","time":67.484507519,"data":"\n"}
+,{"stream_name":"stderr","time":67.484511603,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":67.484537104,"data":"  File \"/usr/local/lib/python3.12/dist-packages/requests/adapters.py\", line 667, in send\n"}
+,{"stream_name":"stderr","time":67.484787499,"data":"    resp = conn.urlopen(\n"}
+,{"stream_name":"stderr","time":67.484795105,"data":"           ^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.484800167,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/connectionpool.py\", line 841, in urlopen\n"}
+,{"stream_name":"stderr","time":67.485062369,"data":"    retries = retries.increment(\n"}
+,{"stream_name":"stderr","time":67.485068426,"data":"              ^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.485073187,"data":"  File \"/usr/local/lib/python3.12/dist-packages/urllib3/util/retry.py\", line 519, in increment\n"}
+,{"stream_name":"stderr","time":67.485320266,"data":"    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]\n"}
+,{"stream_name":"stderr","time":67.485326605,"data":"    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.485332386,"data":"urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.kaggle.com', port=443): Max retries exceeded with url: /v1/security.OAuthService/IntrospectToken (Caused by NameResolutionError(\"\u003curllib3.connection.HTTPSConnection object at 0x780eb952dc40\u003e: Failed to resolve 'api.kaggle.com' ([Errno -3] Temporary failure in name resolution)\"))\n"}
+,{"stream_name":"stderr","time":67.485374193,"data":"\n"}
+,{"stream_name":"stderr","time":67.485379413,"data":"During handling of the above exception, another exception occurred:\n"}
+,{"stream_name":"stderr","time":67.485396159,"data":"\n"}
+,{"stream_name":"stderr","time":67.485400825,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stderr","time":67.485405405,"data":"  File \"/usr/local/bin/kaggle\", line 4, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":67.485497655,"data":"    from kaggle.cli import main\n"}
+,{"stream_name":"stderr","time":67.485504426,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/__init__.py\", line 10, in \u003cmodule\u003e\n"}
+,{"stream_name":"stderr","time":67.485648665,"data":"    api.authenticate()\n"}
+,{"stream_name":"stderr","time":67.485654885,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/api/kaggle_api_extended.py\", line 761, in authenticate\n"}
+,{"stream_name":"stderr","time":67.485979557,"data":"    if self._authenticate_with_access_token():\n"}
+,{"stream_name":"stderr","time":67.485988128,"data":"       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.48599322,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/api/kaggle_api_extended.py\", line 819, in _authenticate_with_access_token\n"}
+,{"stream_name":"stderr","time":67.486389424,"data":"    username = self._introspect_token(access_token)\n"}
+,{"stream_name":"stderr","time":67.486412301,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.486418098,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kaggle/api/kaggle_api_extended.py\", line 859, in _introspect_token\n"}
+,{"stream_name":"stderr","time":67.486769867,"data":"    response = kaggle.security.oauth_client.introspect_token(request)\n"}
+,{"stream_name":"stderr","time":67.486779435,"data":"               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.486784155,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kagglesdk/security/services/oauth_service.py\", line 44, in introspect_token\n"}
+,{"stream_name":"stderr","time":67.486891269,"data":"    return self._client.call(\"security.OAuthService\", \"IntrospectToken\", request, IntrospectTokenResponse)\n"}
+,{"stream_name":"stderr","time":67.486939408,"data":"           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.486963007,"data":"  File \"/usr/local/lib/python3.12/dist-packages/kagglesdk/kaggle_http_client.py\", line 96, in call\n"}
+,{"stream_name":"stderr","time":67.487055467,"data":"    http_response = self._session.send(http_request, **settings)\n"}
+,{"stream_name":"stderr","time":67.487102193,"data":"                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.487107717,"data":"  File \"/usr/local/lib/python3.12/dist-packages/requests/sessions.py\", line 703, in send\n"}
+,{"stream_name":"stderr","time":67.487441857,"data":"    r = adapter.send(request, **kwargs)\n"}
+,{"stream_name":"stderr","time":67.487463854,"data":"        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stderr","time":67.487469601,"data":"  File \"/usr/local/lib/python3.12/dist-packages/requests/adapters.py\", line 700, in send\n"}
+,{"stream_name":"stderr","time":67.487724659,"data":"    raise ConnectionError(e, request=request)\n"}
+,{"stream_name":"stderr","time":67.487732161,"data":"requests.exceptions.ConnectionError: HTTPSConnectionPool(host='api.kaggle.com', port=443): Max retries exceeded with url: /v1/security.OAuthService/IntrospectToken (Caused by NameResolutionError(\"\u003curllib3.connection.HTTPSConnection object at 0x780eb952dc40\u003e: Failed to resolve 'api.kaggle.com' ([Errno -3] Temporary failure in name resolution)\"))\n"}
+,{"stream_name":"stdout","time":67.567746734,"data":"[*] Benchmark y Extracción completados con Zero-Token JSON.\n"}
+,{"stream_name":"stderr","time":70.469062498,"data":"/usr/local/lib/python3.12/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":70.469099327,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":70.876266375,"data":"/usr/local/lib/python3.12/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":70.876299057,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":72.564732256,"data":"[NbConvertApp] Converting notebook __script__.ipynb to html\n"}
+,{"stream_name":"stderr","time":74.242853038,"data":"[NbConvertApp] Writing 278300 bytes to __results__.html\n"}
+]

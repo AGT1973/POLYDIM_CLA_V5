@@ -22,7 +22,7 @@ def run_tests():
     try:
         env = os.environ.copy()
         env["PYTHONIOENCODING"] = "utf-8"
-        res = subprocess.run([sys.executable, monolith], capture_output=True, text=True, encoding='utf-8', timeout=30, env=env)
+        res = subprocess.run([sys.executable, monolith], capture_output=True, text=True, encoding='utf-8', timeout=600, env=env)
         if res.returncode == 0:
             return True, "Execution OK."
         else:

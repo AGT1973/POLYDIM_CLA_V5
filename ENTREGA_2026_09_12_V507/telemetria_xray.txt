@@ -1,0 +1,15 @@
+================= RAYOS-X DEL TENSOR (PMTP) =================
+1. FORMA DEL ESPACIO: (1, 16, 896) (D=896)
+2. BYTES ZERO-COPY:   57344 bytes en OS IPC
+3. NORMA L2 EMISOR:   948.437500
+4. NORMA L2 RECEPTOR: 948.437500
+5. VECTOR CRUDO (Extracto de 5 dimensiones S^D-1):
+   -> EMISOR:   [-1.9673829  -9.611207   -6.9931006   0.40879598  3.9071164 ]
+   -> RECEPTOR: [-1.9673829  -9.611207   -6.9931006   0.40879598  3.9071164 ]
+6. DRIFT MATEMATICO:  0.0 (0.0 = Identidad Absoluta)
+-------------------------------------------------------------
+7. DECODIFICACION INTACTA (Nodo B proyectando el latente crudo):
+   [gers lau la vidaización de1. de -LaLaLaLa]
+8. DECODIFICACION MUTADA (Tensor deformado por factor Escalar 1.5):
+   [gers lau la vidaización de1. de -LaLaLaLa]
+=============================================================

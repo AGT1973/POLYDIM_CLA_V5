@@ -1,0 +1,16 @@
+Here's the Python function that you can use to create a shared memory node in a PMTP architecture:
+
+```python
+def node_a_producer(shm_name, tensor_shape):
+    """
+    Attach to multiprocessing.shared_memory.SharedMemory(name=shm_name)
+    Map a NumPy float32 array of ensor_shape to shm.buf
+    Fill the array from index 1 onwards with some random float data representing a latent state
+    Set the very first element (index 0) to 1.0. This is the flag that tells Node B the data is ready
+    Close the shared memory.
+    """
+    # Attach to multiprocessing.shared_memory.SharedMemory(name=shm_name)
+    with multiprocessing.shared_memory(name=shm_name) as shm:
+        # Map a NumPy float32 array of ensor_shape to shm.buf
+        shm.buf = np.random.rand(tensor_shape[0], tensor_shape[1], tensor_shape[2])
+        #
