@@ -1,0 +1,13 @@
+﻿{
+  "id": "tradingnewtech/polydim-fase11-rdma",
+  "title": "POLYDIM Fase 11 - RDMA",
+  "code_file": "polydim_v714_kaggle_compile.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_internet": "true",
+  "dataset_sources": [],
+  "competition_sources": [],
+  "kernel_sources": []
+}
