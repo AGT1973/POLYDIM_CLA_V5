@@ -57,6 +57,7 @@ PMTP_EXPORT int cayley_step_global_isometry(
         ranges_overlap(S_in, S_next_in, dim) || ranges_overlap(V_in, V_next_in, dim) ||
         ranges_overlap(S_next_in, V_next_in, dim)) return PMTP_ERR_ALIAS;
 
+    const int64_t dim_s = (int64_t)dim;
     int max_threads = omp_get_max_threads();
     
 #if defined(_MSC_VER)
@@ -72,7 +73,7 @@ PMTP_EXPORT int cayley_step_global_isometry(
     {
         int tid = omp_get_thread_num();
         #pragma omp for
-        for (size_t i = 0; i < dim; ++i) {
+        for (int64_t i = 0; i < dim_s; ++i) {
             double s = S_in[i];
             double v = V_in[i];
             neumaier_add(local_acc[tid].sum[0], local_acc[tid].c[0], s * s);
@@ -100,7 +101,7 @@ PMTP_EXPORT int cayley_step_global_isometry(
     {
         int tid = omp_get_thread_num();
         #pragma omp for
-        for (size_t i = 0; i < dim; ++i) {
+        for (int64_t i = 0; i < dim_s; ++i) {
             double w1 = V_in[i] - proj1 * S_in[i];
             neumaier_add(local_acc[tid].sum[2], local_acc[tid].c[2], S_in[i] * w1);
         }
@@ -113,7 +114,7 @@ PMTP_EXPORT int cayley_step_global_isometry(
     {
         int tid = omp_get_thread_num();
         #pragma omp for
-        for (size_t i = 0; i < dim; ++i) {
+        for (int64_t i = 0; i < dim_s; ++i) {
             double vt = (V_in[i] - proj1 * S_in[i]) - proj2 * S_in[i];
             double w = vt * dt;
             W_scratch[i] = w;
@@ -134,7 +135,7 @@ PMTP_EXPORT int cayley_step_global_isometry(
     double rot_v_tangent = ((1.0 - u2_global) / denom) / dt;
 
     #pragma omp parallel for
-    for (size_t i = 0; i < dim; ++i) {
+    for (int64_t i = 0; i < dim_s; ++i) {
         S_next_in[i] = scale_s * S_in[i] + scale_w * W_scratch[i];
         V_next_in[i] = rot_v_scalar * S_in[i] + rot_v_tangent * W_scratch[i];
     }
