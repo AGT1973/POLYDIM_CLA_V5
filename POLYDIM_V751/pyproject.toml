@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "polydim"
+version = "7.51.0"
+description = "High-Dimensional Geometric Tensor & Native Agent Kernel (S^{D-1})"
+readme = "README.md"
+authors = [{ name = "POLYDIM Architecture Core" }]
+license = { text = "MIT" }
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Operating System :: OS Independent"
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.22.0",
+    "scipy>=1.8.0"
+]
+
+[project.optional-dependencies]
+gpu = ["torch>=2.0.0", "triton>=2.0.0"]
+test = ["pytest>=7.0.0", "hypothesis>=6.0.0"]

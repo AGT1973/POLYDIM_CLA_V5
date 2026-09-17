@@ -1,0 +1,18 @@
+[package]
+name = "polydim_rust_guard"
+version = "7.51.0"
+edition = "2021"
+authors = ["POLYDIM Architectural Group"]
+description = "Topological Guard and Invariant Verifier on S^{D-1} for POLYDIM"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Dependencies can be expanded for rayon / HPC platforms
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "unwind"

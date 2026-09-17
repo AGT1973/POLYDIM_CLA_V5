@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0.0",
+  "last_updated": "2026-09-17T12:15:00-03:00",
+  "active_version": "V751",
+  "canonical_path": "E:\\POLYDIM_EINSOF\\POLYDIM_V751\\",
+  "silicon_status": {
+    "suite": "tests/test_v751_suite.py",
+    "result": "5/5 PASS",
+    "verified_on": "Windows 11 x64 (MSVC 19.51 + rustc 1.98.1)",
+    "artifacts": {
+      "cpp_dll": "bin/polydim_kernel.dll",
+      "rust_dll": "bin/polydim_rust_guard.dll",
+      "header": "include/polydim_kernel.h"
+    }
+  },
+  "active_local_tools": {
+    "vectorizer": "E:\\POLYDIM_EINSOF\\ENTREGA_2026_09_17_V739\\vectorize_code.py",
+    "vector_auditor": "E:\\POLYDIM_EINSOF\\ENTREGA_2026_09_17_V739\\polydim_vector_space_auditor.py",
+    "nightly_2am_sync": "E:\\POLYDIM_EINSOF\\nightly_2am.py",
+    "kaggle_benchmark": "E:\\POLYDIM_EINSOF\\ENTREGA_2026_09_17_V741\\benchmark_linux_v741.py"
+  },
+  "cloud_compute_resources": {
+    "colab_accounts": 50,
+    "kaggle_accounts": 4,
+    "target_gpus": ["NVIDIA T4", "NVIDIA A100", "TPU v3-8"]
+  },
+  "contracts": {
+    "math": "Rodrigues Rank-2 with Versine stabilization (-2*sin^2(theta/2))",
+    "dual_solver": "Matrix-Free PCG O(N*D) with Jacobi preconditioning (zero K matrix in RAM)",
+    "concurrency": "SEQLock (Odd=Write, Even=Snapshot) with acquire/release barriers",
+    "git_sync": "2:00 AM daily with anti-leak diff check",
+    "anti_evasion": "CONTRATO_DEBERES_INELUDIBLES.md"
+  },
+  "roadmap_p0_queue": [
+    "P0-3: V752 - CUDA Stream Contract & Non-blocking Event Synchronization (Kaggle/Colab GPU)",
+    "P0-4: V753 - Supervisor / Worker Process Isolation via Shared Memory & Crash Recovery",
+    "P0-5: V754 - Supply-chain, signed artifacts & deterministic benchmark (Chart 1)"
+  ]
+}

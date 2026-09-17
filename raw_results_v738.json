@@ -1,0 +1,82 @@
+{
+  "hardware": {
+    "os": "Windows",
+    "arch": "AMD64",
+    "cpu_count_physical": 1,
+    "cpu_count_logical": 2,
+    "ram_total_gb": 15.96,
+    "ram_available_gb": 6.62
+  },
+  "results": [
+    {
+      "backend": "numpy_cpu",
+      "pathway": "householder",
+      "dimension": 500000,
+      "iterations": 10,
+      "time_seconds": 0.3204579000012018,
+      "l2_norm_initial": 0.9999999999465737,
+      "l2_norm_final": 0.9999999997378974,
+      "l2_drift": 2.0867629846321734e-10,
+      "max_drift_pass": true,
+      "hamming_weight": null,
+      "rust_norm_check": null,
+      "rust_drift_diff": null
+    },
+    {
+      "backend": "numpy_cpu",
+      "pathway": "bsc",
+      "dimension": 500000,
+      "iterations": 10,
+      "time_seconds": 0.0016087999974843115,
+      "l2_norm_initial": 0.0,
+      "l2_norm_final": 0.0,
+      "l2_drift": 0.0,
+      "max_drift_pass": true,
+      "hamming_weight": 250598,
+      "rust_norm_check": null,
+      "rust_drift_diff": null
+    },
+    {
+      "backend": "cpp_cpu",
+      "pathway": "householder",
+      "dimension": 500000,
+      "iterations": 10,
+      "time_seconds": 0.33700600000156555,
+      "l2_norm_initial": 0.9999999999465737,
+      "l2_norm_final": 0.9999999998099587,
+      "l2_drift": 1.366150526038723e-10,
+      "max_drift_pass": true,
+      "hamming_weight": null,
+      "rust_norm_check": 0.9999999998099587,
+      "rust_drift_diff": 0.0
+    },
+    {
+      "backend": "cpp_cpu",
+      "pathway": "bsc",
+      "dimension": 500000,
+      "iterations": 10,
+      "time_seconds": 0.001232700000400655,
+      "l2_norm_initial": 0.0,
+      "l2_norm_final": 0.0,
+      "l2_drift": 0.0,
+      "max_drift_pass": true,
+      "hamming_weight": 249700,
+      "rust_norm_check": null,
+      "rust_drift_diff": null
+    },
+    {
+      "backend": "cpp_cpu",
+      "pathway": "cayley",
+      "dimension": 500000,
+      "iterations": 10,
+      "time_seconds": 0.1787921999930404,
+      "l2_norm_initial": 0.9999999999465737,
+      "l2_norm_final": 0.9999999994461545,
+      "l2_drift": 5.00419261584284e-10,
+      "max_drift_pass": true,
+      "hamming_weight": null,
+      "rust_norm_check": 0.9999999994461545,
+      "rust_drift_diff": 0.0
+    }
+  ]
+}
