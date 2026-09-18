@@ -1,0 +1,35 @@
+﻿================================================================================
+           POLYDIM EMPIRICAL SILICON BENCHMARK & MULTI-HARDWARE RUNNER          
+================================================================================
+OS/Host: Windows 11 (AMD64)
+Python: 3.14.6 | NumPy: 2.5.0
+Target varietal: S^(D-1) Unit Sphere Invariant Retraction & Memory IPC
+================================================================================
+[BOOT] C++ Kernel cargado desde: E:\POLYDIM_EINSOF\ENTREGA_2026_09_18_V753\bin\polydim_kernel.dll
+[BOOT] Rust Guard cargado desde: E:\POLYDIM_EINSOF\ENTREGA_2026_09_18_V753\bin\polydim_rust_guard.dll
+--- TEST A: RENDIMIENTO MATRICIAL DxD (SIN POLYDIM) vs RODRIGUES O(D) (CON POLYDIM) ---
+         D | Method               |  Time (ms) |  Memory (MB) |   Drift (|norm-1|) | Status
+----------------------------------------------------------------------------------------
+     1,000 | Dense W@x (1D/2D)    |       0.95 |         3.81 |      N/A (No norm) | BASELINE
+     1,000 | POLYDIM Rodrigues    |       1.70 |         0.03 |           1.11e-16 | PASS (Rust OK)
+     5,000 | Dense W@x (1D/2D)    |      18.09 |        95.37 |      N/A (No norm) | BASELINE
+     5,000 | POLYDIM Rodrigues    |       1.55 |         0.15 |           0.00e+00 | PASS (Rust OK)
+    10,000 | Dense W@x (1D/2D)    |      66.08 |       381.47 |      N/A (No norm) | BASELINE
+    10,000 | POLYDIM Rodrigues    |       0.17 |         0.31 |           0.00e+00 | PASS (Rust OK)
+    50,000 | Dense W@x (1D/2D)    |        OOM |        >9 GB |                OOM | MEM_EXHAUSTED
+    50,000 | POLYDIM Rodrigues    |       1.61 |         1.53 |           0.00e+00 | PASS (Rust OK)
+   100,000 | Dense W@x (1D/2D)    |        OOM |       >37 GB |                OOM | MEM_EXHAUSTED
+   100,000 | POLYDIM Rodrigues    |       1.82 |         3.05 |           0.00e+00 | PASS (Rust OK)
+   500,000 | Dense W@x (1D/2D)    |        OOM |      >931 GB |                OOM | MEM_EXHAUSTED
+   500,000 | POLYDIM Rodrigues    |      15.74 |        15.26 |           2.22e-16 | PASS (Rust OK)
+ 1,000,000 | Dense W@x (1D/2D)    |        OOM |     >3725 GB |                OOM | MEM_EXHAUSTED
+ 1,000,000 | POLYDIM Rodrigues    |      25.13 |        30.52 |           4.44e-16 | PASS (Rust OK)
+--- TEST B: PROTOCOLO IPC PMTP (ZERO-COPY) vs SERIALIZACION 1D (JSON / HTTP) ---
+         D |  Payload 1D (JSON) |  Time JSON (ms) |  Time PMTP (ms) | Speedup IPC
+------------------------------------------------------------------------------
+    10,000 |            0.20 MB |           20.28 |          0.1323 |      153.3x
+   100,000 |            1.97 MB |          186.51 |          0.0621 |     3003.3x
+   500,000 |            9.84 MB |          874.99 |          0.0599 |    14607.6x
+================================================================================
+  LOG DE EJECUCION FISICA GENERADO EXITOSAMENTE SIN SIMULACION
+================================================================================

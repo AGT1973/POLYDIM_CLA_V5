@@ -1,0 +1,40 @@
+﻿// ==============================================================================
+param memcpy_params: comptime_struct;
+param D_per_pe: u32;
+const sys_mod = @import_module("<memcpy/memcpy_client>", memcpy_params);
+const math = @import_module("<math>");
+const rx_color: color = @get_color(0);
+const tx_color: color = @get_color(1);
+var y_local = @zeros([D_per_pe]f32);
+var u_local = @zeros([D_per_pe]f32);
+var v_local = @zeros([D_per_pe]f32);
+var theta_pe: f32 = 0.0;
+var coeff_p: f32 = 0.0;
+var coeff_j: f32 = 0.0;
+var sum_u: f32 = 0.0;
+var c_u: f32 = 0.0;
+var sum_v: f32 = 0.0;
+var c_v: f32 = 0.0;
+task rodrigues_pe_task() void {
+    const half_theta: f32 = theta_pe * 0.5;
+    const sin_half: f32 = @sin(half_theta);
+    coeff_p = -2.0 * sin_half * sin_half;
+    coeff_j = @sin(theta_pe);
+    var cu_local: f32 = 0.0;
+    var cv_local: f32 = 0.0;
+    for (@range(u32, D_per_pe)) |i| {
+        cu_local += y_local[i] * u_local[i];
+        cv_local += y_local[i] * v_local[i];
+    }
+    for (@range(u32, D_per_pe)) |i| {
+        const u_i: f32 = u_local[i];
+        const v_i: f32 = v_local[i];
+        const delta_y: f32 = coeff_p * (cu_local * u_i + cv_local * v_i) +
+                             coeff_j * (cu_local * v_i - cv_local * u_i);
+        y_local[i] += delta_y;
+    }
+    sys_mod.unblock_cmd_stream();
+}
+comptime {
+    @bind_task(rodrigues_pe_task, @get_data_task_id(rx_color));
+}

@@ -1,14 +1,16 @@
-/*
- * POLYDIM V751 INDUSTRIAL TOPOLOGICAL GUARD & INVARIANT AUDITOR (RUST)
- * High-Dimensional Unit Sphere Invariant Guard (S^{D-1}, D >= 10^7)
+﻿/*
+ * POLYDIM V753 INDUSTRIAL TOPOLOGICAL GUARD & INVARIANT AUDITOR (RUST)
+ * Rigorous 2nd-Order Bound: |s_hat - s| <= c * N * eps_mach^2 + 10 * eps_mach (L2 norm squared bound)
  */
 
 use std::panic::catch_unwind;
 use std::slice;
 
 pub const EPSILON_MACH_F64: f64 = f64::EPSILON; // 2.220446049250313e-16
+pub const EPSILON_MACH_SQ: f64 = EPSILON_MACH_F64 * EPSILON_MACH_F64;
+pub const NEUMAIER_SAFETY_FACTOR: f64 = 100.0;
+pub const EPSILON_ULP_FLOOR: f64 = 10.0 * EPSILON_MACH_F64; // ~2.22e-15 bound for norm squared
 pub const YCOMP_BUDGET_SAFETY_FACTOR: f64 = 50.0;
-pub const DYNAMIC_TOL_SAFETY_FACTOR: f64 = 50.0;
 
 #[repr(i32)]
 pub enum PolydimStatus {
@@ -17,13 +19,15 @@ pub enum PolydimStatus {
     ErrInvalidDimension = -2,
     ErrNanInfDetected = -3,
     ErrNormInvariantViolated = -4,
+    ErrZeroVector = -5,
+    ErrCollinearVectors = -6,
     ErrYcompBudgetExceeded = -7,
     ErrPanicCaught = -9,
 }
 
 #[inline]
-pub fn compute_dynamic_tolerance(len: u64) -> f64 {
-    DYNAMIC_TOL_SAFETY_FACTOR * (len as f64).sqrt() * EPSILON_MACH_F64
+pub fn compute_neumaier_second_order_tolerance(len: u64) -> f64 {
+    NEUMAIER_SAFETY_FACTOR * (len as f64) * EPSILON_MACH_SQ + EPSILON_ULP_FLOOR
 }
 
 #[inline]
@@ -69,7 +73,7 @@ pub extern "C" fn polydim_rust_verify_unit_norm_invariant_f64(
         let tolerance = if user_tolerance > 0.0 {
             user_tolerance
         } else {
-            compute_dynamic_tolerance(len)
+            compute_neumaier_second_order_tolerance(len)
         };
 
         if (final_norm_sq - 1.0).abs() <= tolerance {
