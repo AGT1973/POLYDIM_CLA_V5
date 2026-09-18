@@ -1,16 +1,17 @@
 {
   "schema_version": "1.0.0",
-  "last_updated": "2026-09-17T12:15:00-03:00",
-  "active_version": "V751",
-  "canonical_path": "E:\\POLYDIM_EINSOF\\POLYDIM_V751\\",
+  "last_updated": "2026-09-18T02:02:00-03:00",
+  "active_version": "V753",
+  "canonical_path": "E:\\POLYDIM_EINSOF\\ENTREGA_2026_09_18_V753\\",
   "silicon_status": {
-    "suite": "tests/test_v751_suite.py",
-    "result": "5/5 PASS",
+    "suite": "raw_silicon_benchmark_v753.py",
+    "result": "7/7 PASS (D=1K to D=1M)",
     "verified_on": "Windows 11 x64 (MSVC 19.51 + rustc 1.98.1)",
+    "max_drift": "<= 4.44e-16",
     "artifacts": {
       "cpp_dll": "bin/polydim_kernel.dll",
       "rust_dll": "bin/polydim_rust_guard.dll",
-      "header": "include/polydim_kernel.h"
+      "csl_kernel": "kernel_csl_v753.csl.txt"
     }
   },
   "active_local_tools": {
@@ -22,7 +23,11 @@
   "cloud_compute_resources": {
     "colab_accounts": 50,
     "kaggle_accounts": 4,
-    "target_gpus": ["NVIDIA T4", "NVIDIA A100", "TPU v3-8"]
+    "target_gpus": [
+      "NVIDIA T4",
+      "NVIDIA A100",
+      "TPU v3-8"
+    ]
   },
   "contracts": {
     "math": "Rodrigues Rank-2 with Versine stabilization (-2*sin^2(theta/2))",
@@ -35,5 +40,11 @@
     "P0-3: V752 - CUDA Stream Contract & Non-blocking Event Synchronization (Kaggle/Colab GPU)",
     "P0-4: V753 - Supervisor / Worker Process Isolation via Shared Memory & Crash Recovery",
     "P0-5: V754 - Supply-chain, signed artifacts & deterministic benchmark (Chart 1)"
-  ]
+  ],
+  "git_sync_status": {
+    "last_sync": "2026-09-18 02:01:50",
+    "commit_id": "b4442b5",
+    "remote": "origin/master",
+    "status": "CLEAN_AND_PUSHED"
+  }
 }
